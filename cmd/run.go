@@ -89,10 +89,6 @@ var runCmd = &cobra.Command{
 		if cmd.Flags().Changed("ssh-agent") {
 			creds.SSHAgent = *runSSHAgent
 		}
-		if creds.SSH && creds.SSHAgent {
-			fmt.Fprintf(os.Stderr, "Warning: --ssh-agent and --ssh-creds are both set; using --ssh-agent\n")
-			creds.SSH = false
-		}
 		if cmd.Flags().Changed("gh-creds") {
 			creds.GH = *runGHCreds
 		}
@@ -112,6 +108,12 @@ var runCmd = &cobra.Command{
 			creds.GPG = true
 			creds.NPM = true
 			creds.AWS = true
+		}
+
+		// SSH agent takes precedence over SSH key mounting
+		if creds.SSH && creds.SSHAgent {
+			fmt.Fprintf(os.Stderr, "Warning: --ssh-agent and --ssh-creds are both set; using --ssh-agent\n")
+			creds.SSH = false
 		}
 
 		// Determine which runtime to use (flag > config > detect)

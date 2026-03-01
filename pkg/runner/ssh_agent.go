@@ -41,7 +41,9 @@ func findSSHAgentSocketDarwin() (string, error) {
 		return findColimaSSHSocket()
 	}
 
-	// Docker Desktop provides a well-known socket path inside its VM
+	// Docker Desktop provides a well-known socket path inside its VM.
+	// Requires "Allow the default Docker socket to be used" in Docker Desktop settings.
+	// If SSH operations fail, verify SSH agent forwarding is enabled in Docker Desktop.
 	return "/run/host-services/ssh-auth.sock", nil
 }
 

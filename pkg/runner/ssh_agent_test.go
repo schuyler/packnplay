@@ -37,9 +37,15 @@ func TestFindSSHAgentSocketLinuxUnset(t *testing.T) {
 	}
 
 	// Unset SSH_AUTH_SOCK for this test
-	orig := os.Getenv("SSH_AUTH_SOCK")
+	orig, wasSet := os.LookupEnv("SSH_AUTH_SOCK")
 	os.Unsetenv("SSH_AUTH_SOCK")
-	defer os.Setenv("SSH_AUTH_SOCK", orig)
+	defer func() {
+		if wasSet {
+			os.Setenv("SSH_AUTH_SOCK", orig)
+		} else {
+			os.Unsetenv("SSH_AUTH_SOCK")
+		}
+	}()
 
 	_, err := findSSHAgentSocketLinux()
 	if err == nil {
