@@ -42,16 +42,16 @@ func TestLifecycleExecutor_ExecuteString(t *testing.T) {
 	}
 }
 
-// TestLifecycleExecutor_ExecuteArray tests executing an array command
-func TestLifecycleExecutor_ExecuteArray(t *testing.T) {
+// TestLifecycleExecutor_ExecuteArray_ShellCommands tests array where each
+// element is a full shell command (first element contains a space).
+func TestLifecycleExecutor_ExecuteArray_ShellCommands(t *testing.T) {
 	mockClient := &mockDockerClient{
 		execCalls: [][]string{},
 	}
 
 	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
 
-	// Create an array command
-	jsonData := `["npm", "install"]`
+	jsonData := `["npm install", "npm run build"]`
 	var cmd devcontainer.LifecycleCommand
 	if err := cmd.UnmarshalJSON([]byte(jsonData)); err != nil {
 		t.Fatalf("Failed to unmarshal command: %v", err)
@@ -62,16 +62,46 @@ func TestLifecycleExecutor_ExecuteArray(t *testing.T) {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	// Verify docker exec was called directly with command
+	// Each element runs as a separate shell command
+	if len(mockClient.execCalls) != 2 {
+		t.Fatalf("Expected 2 exec calls, got %d", len(mockClient.execCalls))
+	}
+
+	for i, call := range mockClient.execCalls {
+		if !contains(call, "/bin/sh", "-c") {
+			t.Errorf("exec call %d: expected shell execution, got: %v", i, call)
+		}
+	}
+}
+
+// TestLifecycleExecutor_ExecuteArray_DirectExec tests array where elements
+// form a single command with arguments (first element has no space).
+func TestLifecycleExecutor_ExecuteArray_DirectExec(t *testing.T) {
+	mockClient := &mockDockerClient{
+		execCalls: [][]string{},
+	}
+
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
+
+	jsonData := `["sh", "-c", "echo hello"]`
+	var cmd devcontainer.LifecycleCommand
+	if err := cmd.UnmarshalJSON([]byte(jsonData)); err != nil {
+		t.Fatalf("Failed to unmarshal command: %v", err)
+	}
+
+	err := executor.Execute("postCreate", &cmd)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Single direct exec call, no shell wrapping
 	if len(mockClient.execCalls) != 1 {
 		t.Fatalf("Expected 1 exec call, got %d", len(mockClient.execCalls))
 	}
 
 	execArgs := mockClient.execCalls[0]
-	// Should be: exec -u testuser test-container npm install
-	if !contains(execArgs, "exec") || !contains(execArgs, "test-container") ||
-		!contains(execArgs, "npm") || !contains(execArgs, "install") {
-		t.Errorf("Expected docker exec with direct command, got: %v", execArgs)
+	if !contains(execArgs, "sh", "-c", "echo hello") {
+		t.Errorf("Expected direct exec with sh -c, got: %v", execArgs)
 	}
 }
 
@@ -259,6 +289,106 @@ func TestLifecycleExecutor_MultipleParallelErrors(t *testing.T) {
 	// Should contain task names
 	if !strings.Contains(errMsg, "task") {
 		t.Errorf("Expected error to include task names, got: %s", errMsg)
+	}
+}
+
+// TestLifecycleExecutor_ObjectWithArrayValues tests executing an object command
+// where values are arrays of shell commands (as used in packnplay's devcontainer.json).
+// Each array element is a full shell command that should be run through /bin/sh -c,
+// NOT treated as [executable, arg1, arg2, ...].
+func TestLifecycleExecutor_ObjectWithArrayValues(t *testing.T) {
+	mockClient := &mockDockerClient{
+		execCalls: [][]string{},
+	}
+
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
+
+	// This mirrors the format in .devcontainer/devcontainer.json:
+	// object with array values where each element is a shell command
+	jsonData := `{
+		"versions": [
+			"echo 'Development Environment Setup Complete'",
+			"node --version",
+			"python3 --version"
+		],
+		"ai-tools": [
+			"echo 'Installing AI CLI tools...'",
+			"npm install -g @anthropic-ai/claude-code",
+			"echo 'Done'"
+		]
+	}`
+	var cmd devcontainer.LifecycleCommand
+	if err := cmd.UnmarshalJSON([]byte(jsonData)); err != nil {
+		t.Fatalf("Failed to unmarshal command: %v", err)
+	}
+
+	err := executor.Execute("onCreate", &cmd)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Each array element should have been executed through a shell.
+	// Verify that every exec call includes /bin/sh -c
+	for i, call := range mockClient.execCalls {
+		callStr := strings.Join(call, " ")
+		if !strings.Contains(callStr, "/bin/sh") || !strings.Contains(callStr, "-c") {
+			t.Errorf("exec call %d was not run through shell: %v", i, call)
+		}
+	}
+
+	// The first element of each array should NOT be treated as an executable path.
+	// If we see "echo 'Development Environment Setup Complete'" as a direct arg
+	// after the container name (without /bin/sh -c before it), that's the bug.
+	for i, call := range mockClient.execCalls {
+		// Find the container name position, everything after it is the command
+		for j, arg := range call {
+			if arg == "test-container" && j+1 < len(call) {
+				nextArg := call[j+1]
+				if nextArg != "/bin/sh" {
+					t.Errorf("exec call %d: expected /bin/sh after container name, got %q — command is being executed without a shell", i, nextArg)
+				}
+				break
+			}
+		}
+	}
+}
+
+// TestLifecycleExecutor_TopLevelArrayOfShellCommands tests a top-level array
+// where each element is a full shell command (not [command, arg1, arg2, ...]).
+func TestLifecycleExecutor_TopLevelArrayOfShellCommands(t *testing.T) {
+	mockClient := &mockDockerClient{
+		execCalls: [][]string{},
+	}
+
+	executor := NewLifecycleExecutor(mockClient, "test-container", "testuser", false, nil)
+
+	// This mirrors postCreateCommand from .devcontainer/devcontainer.json
+	jsonData := `[
+		"echo 'container ready'",
+		"echo 'all tools configured'"
+	]`
+	var cmd devcontainer.LifecycleCommand
+	if err := cmd.UnmarshalJSON([]byte(jsonData)); err != nil {
+		t.Fatalf("Failed to unmarshal command: %v", err)
+	}
+
+	err := executor.Execute("postCreate", &cmd)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Each element should be run as a separate shell command.
+	// The first element should NOT be treated as the executable path.
+	for i, call := range mockClient.execCalls {
+		for j, arg := range call {
+			if arg == "test-container" && j+1 < len(call) {
+				nextArg := call[j+1]
+				if nextArg != "/bin/sh" {
+					t.Errorf("exec call %d: expected /bin/sh after container name, got %q — command is being executed without a shell", i, nextArg)
+				}
+				break
+			}
+		}
 	}
 }
 

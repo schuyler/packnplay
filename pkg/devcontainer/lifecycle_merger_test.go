@@ -169,11 +169,11 @@ func TestMergeLifecycleCommands_NoUserCommands(t *testing.T) {
 }
 
 func TestMergeLifecycleCommands_ArrayCommands(t *testing.T) {
-	// Feature with array command
+	// Feature with array command (each element is a shell command)
 	featureMetadata := &FeatureMetadata{
 		ID: "feature1",
 		PostCreateCommand: &LifecycleCommand{
-			raw: []interface{}{"npm", "install"},
+			raw: []interface{}{"npm install", "echo done"},
 		},
 	}
 
@@ -184,7 +184,7 @@ func TestMergeLifecycleCommands_ArrayCommands(t *testing.T) {
 
 	// User with array command
 	userPostCreate := &LifecycleCommand{
-		raw: []interface{}{"npm", "run", "build"},
+		raw: []interface{}{"npm run build", "npm test"},
 	}
 
 	merger := NewLifecycleMerger()
@@ -198,9 +198,9 @@ func TestMergeLifecycleCommands_ArrayCommands(t *testing.T) {
 	}
 
 	commands := postCreate.ToStringSlice()
-	// Should have 2 commands (one array command per feature/user)
-	if len(commands) != 2 {
-		t.Errorf("Expected 2 commands, got %d", len(commands))
+	// Should have 4 commands: 2 from feature + 2 from user
+	if len(commands) != 4 {
+		t.Errorf("Expected 4 commands, got %d: %v", len(commands), commands)
 	}
 }
 
@@ -288,8 +288,8 @@ func TestLifecycleCommand_ToStringSlice(t *testing.T) {
 		},
 		{
 			name:     "array command",
-			raw:      []interface{}{"npm", "install"},
-			expected: []string{"npm install"},
+			raw:      []interface{}{"npm install", "npm test"},
+			expected: []string{"npm install", "npm test"},
 		},
 		{
 			name: "object command",
@@ -351,19 +351,20 @@ func TestLifecycleCommand_ToStringSlice_ParsesJSON(t *testing.T) {
 		}
 	}
 
-	// Test array command
+	// Test array command — each element is a separate command
 	if cmd2 := commands["cmd2"]; cmd2 != nil {
 		slice := cmd2.ToStringSlice()
-		if len(slice) != 1 || slice[0] != "npm run build" {
-			t.Errorf("Expected ['npm run build'], got %v", slice)
+		if len(slice) != 3 || slice[0] != "npm" || slice[1] != "run" || slice[2] != "build" {
+			t.Errorf("Expected [npm run build] as 3 separate commands, got %v", slice)
 		}
 	}
 
-	// Test object command
+	// Test object command — array values expand to individual commands
 	if cmd3 := commands["cmd3"]; cmd3 != nil {
 		slice := cmd3.ToStringSlice()
-		if len(slice) != 2 {
-			t.Errorf("Expected 2 commands, got %d", len(slice))
+		// task1 is a string (1 command), task2 is an array of 2 elements (2 commands)
+		if len(slice) != 3 {
+			t.Errorf("Expected 3 commands, got %d: %v", len(slice), slice)
 		}
 	}
 }

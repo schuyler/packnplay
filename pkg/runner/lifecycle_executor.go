@@ -2,6 +2,7 @@ package runner
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/obra/packnplay/pkg/devcontainer"
@@ -58,7 +59,7 @@ func (le *LifecycleExecutor) Execute(commandType string, cmd *devcontainer.Lifec
 		err = le.executeShellCommand(str)
 	} else if cmd.IsArray() {
 		arr, _ := cmd.AsArray()
-		err = le.executeDirectCommand(arr)
+		err = le.executeArrayCommand(arr)
 	} else if cmd.IsObject() {
 		obj, _ := cmd.AsObject()
 		err = le.executeParallelCommands(obj)
@@ -106,6 +107,30 @@ func (le *LifecycleExecutor) executeMergedCommands(commands []string) error {
 		}
 	}
 	return nil
+}
+
+// executeArrayCommand handles array lifecycle commands by detecting the format:
+//   - If the first element contains a space, each element is a separate shell command
+//     (e.g., ["echo 'hello'", "npm install"] — common in devcontainer.json)
+//   - Otherwise, the array is a single command with arguments
+//     (e.g., ["sh", "-c", "echo hello"] — per devcontainer spec)
+func (le *LifecycleExecutor) executeArrayCommand(commands []string) error {
+	if len(commands) == 0 {
+		return nil
+	}
+
+	if strings.Contains(commands[0], " ") {
+		// Each element is a separate shell command
+		for _, cmd := range commands {
+			if err := le.executeShellCommand(cmd); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Single command with arguments — direct exec
+	return le.executeDirectCommand(commands)
 }
 
 // executeDirectCommand executes a command with direct arguments (no shell).
@@ -156,7 +181,7 @@ func (le *LifecycleExecutor) executeParallelCommands(commands map[string]interfa
 						return
 					}
 				}
-				err = le.executeDirectCommand(strArray)
+				err = le.executeArrayCommand(strArray)
 			default:
 				err = fmt.Errorf("task %s: invalid command type: %T", taskName, taskCmd)
 			}

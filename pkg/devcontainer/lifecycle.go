@@ -135,20 +135,12 @@ func (lc *LifecycleCommand) ToStringSlice() []string {
 		return []string{s}
 	}
 
-	// Handle array command - join elements into single command
+	// Handle array command - each element is a separate shell command
 	if arr, ok := lc.AsArray(); ok {
 		if len(arr) == 0 {
 			return nil
 		}
-		// Join array elements with space (e.g., ["npm", "install"] -> "npm install")
-		result := ""
-		for i, elem := range arr {
-			if i > 0 {
-				result += " "
-			}
-			result += elem
-		}
-		return []string{result}
+		return arr
 	}
 
 	// Handle object command (parallel tasks)
@@ -160,18 +152,11 @@ func (lc *LifecycleCommand) ToStringSlice() []string {
 			case string:
 				result = append(result, cmd)
 			case []interface{}:
-				// Convert array to command string
-				cmdStr := ""
-				for i, elem := range cmd {
-					if i > 0 {
-						cmdStr += " "
-					}
+				// Each array element is a separate shell command
+				for _, elem := range cmd {
 					if s, ok := elem.(string); ok {
-						cmdStr += s
+						result = append(result, s)
 					}
-				}
-				if cmdStr != "" {
-					result = append(result, cmdStr)
 				}
 			default:
 				// Unknown type, use task name as fallback
