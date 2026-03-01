@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestFindSSHAgentSocketLinux verifies socket discovery on Linux when SSH_AUTH_SOCK is set or empty.
 func TestFindSSHAgentSocketLinux(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux-only test")
@@ -31,6 +32,7 @@ func TestFindSSHAgentSocketLinux(t *testing.T) {
 	})
 }
 
+// TestFindSSHAgentSocketLinuxUnset verifies that an error is returned when SSH_AUTH_SOCK is not set.
 func TestFindSSHAgentSocketLinuxUnset(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux-only test")
@@ -53,6 +55,7 @@ func TestFindSSHAgentSocketLinuxUnset(t *testing.T) {
 	}
 }
 
+// TestFindSSHAgentSocketDarwin verifies socket discovery on macOS for Docker Desktop and Colima.
 func TestFindSSHAgentSocketDarwin(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS-only test")
