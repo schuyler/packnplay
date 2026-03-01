@@ -829,8 +829,17 @@ func Run(config *RunConfig) error {
 		}
 	}
 
-	// Mount SSH keys
-	if config.Credentials.SSH {
+	// Mount SSH keys or forward SSH agent
+	if config.Credentials.SSHAgent {
+		socketPath, err := findSSHAgentSocket()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: SSH agent forwarding not available: %v\n", err)
+		} else {
+			containerSocket := "/tmp/ssh-agent.sock"
+			args = append(args, "-v", fmt.Sprintf("%s:%s", socketPath, containerSocket))
+			args = append(args, "-e", fmt.Sprintf("SSH_AUTH_SOCK=%s", containerSocket))
+		}
+	} else if config.Credentials.SSH {
 		sshPath := filepath.Join(homeDir, ".ssh")
 		if fileExists(sshPath) {
 			args = append(args, "-v", fmt.Sprintf("%s:/home/%s/.ssh:ro", sshPath, devConfig.RemoteUser))
@@ -1297,6 +1306,21 @@ func Run(config *RunConfig) error {
 		_, err = dockerClient.Run("exec", containerID, "cp", "/tmp/packnplay-credentials.json", fmt.Sprintf("/home/%s/.claude/.credentials.json", devConfig.RemoteUser))
 		if err != nil && config.Verbose {
 			fmt.Fprintf(os.Stderr, "Warning: failed to copy credentials: %v\n", err)
+		}
+	}
+
+	// Copy SSH config into container when using SSH agent forwarding
+	if config.Credentials.SSHAgent {
+		sshConfig := filepath.Join(homeDir, ".ssh", "config")
+		if fileExists(sshConfig) {
+			dstDir := fmt.Sprintf("/home/%s/.ssh", devConfig.RemoteUser)
+			// Create .ssh dir with correct ownership and permissions
+			_, _ = dockerClient.Run("exec", "-u", "root", containerID, "mkdir", "-p", dstDir)
+			_, _ = dockerClient.Run("exec", "-u", "root", containerID, "chown", fmt.Sprintf("%s:%s", devConfig.RemoteUser, devConfig.RemoteUser), dstDir)
+			_, _ = dockerClient.Run("exec", "-u", "root", containerID, "chmod", "700", dstDir)
+			if err := copyFileToContainer(dockerClient, containerID, sshConfig, dstDir+"/config", devConfig.RemoteUser, config.Verbose); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to copy SSH config: %v\n", err)
+			}
 		}
 	}
 

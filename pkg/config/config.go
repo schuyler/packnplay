@@ -41,12 +41,13 @@ type EnvConfig struct {
 
 // Credentials specifies which credentials to mount
 type Credentials struct {
-	Git bool `json:"git"` // ~/.gitconfig
-	SSH bool `json:"ssh"` // ~/.ssh keys
-	GH  bool `json:"gh"`  // GitHub CLI credentials
-	GPG bool `json:"gpg"` // GPG keys for commit signing
-	NPM bool `json:"npm"` // npm credentials
-	AWS bool `json:"aws"` // AWS credentials
+	Git      bool `json:"git"`      // ~/.gitconfig
+	SSH      bool `json:"ssh"`      // ~/.ssh keys (bind mount)
+	SSHAgent bool `json:"sshAgent"` // SSH agent socket forwarding
+	GH       bool `json:"gh"`       // GitHub CLI credentials
+	GPG      bool `json:"gpg"`      // GPG keys for commit signing
+	NPM      bool `json:"npm"`      // npm credentials
+	AWS      bool `json:"aws"`      // AWS credentials
 }
 
 // GetDefaultImage returns the configured default image or fallback
@@ -319,6 +320,13 @@ func createTabbedConfig(existing *Config) *TabbedConfigModel {
 					value:       existing.DefaultCredentials.SSH,
 				},
 				{
+					name:        "ssh-agent",
+					fieldType:   "toggle",
+					title:       "SSH agent forwarding",
+					description: "Forward host SSH agent socket (keys stay on host)",
+					value:       existing.DefaultCredentials.SSHAgent,
+				},
+				{
 					name:        "github",
 					fieldType:   "toggle",
 					title:       "GitHub CLI credentials",
@@ -493,6 +501,8 @@ func applyTabbedConfigUpdates(model *TabbedConfigModel, configPath string) error
 				runtime = field.value.(string)
 			case "ssh":
 				creds.SSH = field.value.(bool)
+			case "ssh-agent":
+				creds.SSHAgent = field.value.(bool)
 			case "github":
 				creds.GH = field.value.(bool)
 			case "gpg":
@@ -601,6 +611,13 @@ func createSettingsModal(existing *Config) *SettingsModal {
 					title:       "SSH keys",
 					description: "Mount ~/.ssh (read-only) for SSH authentication",
 					value:       existing.DefaultCredentials.SSH,
+				},
+				{
+					name:        "ssh-agent",
+					fieldType:   "toggle",
+					title:       "SSH agent forwarding",
+					description: "Forward host SSH agent socket (keys stay on host)",
+					value:       existing.DefaultCredentials.SSHAgent,
 				},
 				{
 					name:        "github",
@@ -787,6 +804,8 @@ func applyModalConfigUpdates(modal *SettingsModal, configPath string) error {
 				runtime = field.value.(string)
 			case "ssh":
 				creds.SSH = field.value.(bool)
+			case "ssh-agent":
+				creds.SSHAgent = field.value.(bool)
 			case "github":
 				creds.GH = field.value.(bool)
 			case "gpg":

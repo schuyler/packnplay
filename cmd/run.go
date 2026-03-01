@@ -25,13 +25,14 @@ var (
 	runReconnect    bool
 	runPublishPorts []string
 	// Credential flags
-	runGitCreds *bool
-	runSSHCreds *bool
-	runGHCreds  *bool
-	runGPGCreds *bool
-	runNPMCreds *bool
-	runAWSCreds *bool
-	runAllCreds bool
+	runGitCreds  *bool
+	runSSHCreds  *bool
+	runSSHAgent  *bool
+	runGHCreds   *bool
+	runGPGCreds  *bool
+	runNPMCreds  *bool
+	runAWSCreds  *bool
+	runAllCreds  bool
 )
 
 var runCmd = &cobra.Command{
@@ -84,6 +85,13 @@ var runCmd = &cobra.Command{
 		}
 		if cmd.Flags().Changed("ssh-creds") {
 			creds.SSH = *runSSHCreds
+		}
+		if cmd.Flags().Changed("ssh-agent") {
+			creds.SSHAgent = *runSSHAgent
+		}
+		if creds.SSH && creds.SSHAgent {
+			fmt.Fprintf(os.Stderr, "Warning: --ssh-agent and --ssh-creds are both set; using --ssh-agent\n")
+			creds.SSH = false
 		}
 		if cmd.Flags().Changed("gh-creds") {
 			creds.GH = *runGHCreds
@@ -188,6 +196,7 @@ func init() {
 	// Credential flags (use pointers so we can detect if they were explicitly set)
 	runGitCreds = runCmd.Flags().Bool("git-creds", false, "Mount git config (~/.gitconfig)")
 	runSSHCreds = runCmd.Flags().Bool("ssh-creds", false, "Mount SSH keys (~/.ssh)")
+	runSSHAgent = runCmd.Flags().Bool("ssh-agent", false, "Forward SSH agent socket (keys stay on host)")
 	runGHCreds = runCmd.Flags().Bool("gh-creds", false, "Mount GitHub CLI credentials")
 	runGPGCreds = runCmd.Flags().Bool("gpg-creds", false, "Mount GPG credentials for commit signing")
 	runNPMCreds = runCmd.Flags().Bool("npm-creds", false, "Mount npm credentials")
