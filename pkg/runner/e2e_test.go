@@ -3881,7 +3881,7 @@ func TestE2E_GHCredsMount(t *testing.T) {
 	defer os.Remove(markerFile)
 	defer func() {
 		if createdGHDir {
-			os.RemoveAll(ghConfigDir)
+			os.Remove(ghConfigDir)
 		}
 	}()
 

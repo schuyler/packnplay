@@ -415,7 +415,7 @@ packnplay mounts your project at the **exact same path** inside the container as
 
 ## Requirements
 
-- **Docker**: Docker Desktop on macOS, or Docker Engine on Linux
+- **Docker**: Docker Desktop, Colima, or Podman on macOS; Docker Engine on Linux
 - **Git**: For worktree functionality
 - **Go 1.23+**: For building from source
 - **Optional**: GitHub CLI (`gh`) for GitHub operations
